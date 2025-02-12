@@ -1,0 +1,15 @@
+# ignore hidden dirs
+.*
+# but track this one :)
+!.gitignore
+
+# normal dirs
+RootFiles/
+
+#files
+*.root
+*.png
+*.pdf
+*.zip
+
+compile_flags.txt
