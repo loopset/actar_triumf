@@ -59,6 +59,9 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     // Silicons
     auto* sils {new ActPhysics::SilSpecs};
     sils->ReadFile("../configs/silicons.conf");
+    const double sigmaSil {0.060 / 2.355}; // Si resolution
+    auto silRes = std::make_unique<TF1>(
+        "silRes", [=](double* x) { return sigmaSil * TMath::Sqrt(x[0] / 5.5); }, 0.0, 100.0, 1);
     // We have to centre the silicons with the beam input
     // In real life beam window is not at Z / 2
     for(auto& [name, layer] : sils->GetLayers())
