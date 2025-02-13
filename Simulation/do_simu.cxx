@@ -61,7 +61,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     sils->ReadFile("../configs/silicons.conf");
     const double sigmaSil {0.060 / 2.355}; // Si resolution
     auto silRes = std::make_unique<TF1>(
-        "silRes", [=](double* x) { return sigmaSil * TMath::Sqrt(x[0] / 5.5); }, 0.0, 100.0, 1);
+        "silRes", [=](double* x, double* p) { return sigmaSil * TMath::Sqrt(x[0] / 5.5); }, 0.0, 100.0, 1);
     // We have to centre the silicons with the beam input
     // In real life beam window is not at Z / 2
     for(auto& [name, layer] : sils->GetLayers())
@@ -131,7 +131,8 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         auto angleWithNormal {TMath::ACos(direction.Unit().Dot(normal.Unit()))};
         auto T3AfterSil0 {srim->SlowWithStraggling("lightInSil", T3AtSil, sils->GetLayer("f0").GetUnit().GetThickness(),
                                                    angleWithNormal)};
-        auto eLoss0 {T3AtSil - T3AfterSil0};
+        auto T3AfterSil0Res {gRandom->Gaus(T3AfterSil0, silRes->Eval(T3AfterSil0))};
+        auto eLoss0 {T3AtSil - T3AfterSil0Res};
         ApplyNaN(eLoss0, sils->GetLayer("f0").GetThresholds().at(silIndex0));
         if(std::isnan(eLoss0))
             continue;
