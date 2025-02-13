@@ -12,6 +12,7 @@
 #include "TMath.h"
 #include "TRandom.h"
 #include "TString.h"
+#include "TF1.h"
 
 #include <cmath>
 #include <iostream>
