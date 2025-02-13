@@ -6,14 +6,17 @@
 #include "ActTPCParameters.h"
 
 #include "TCanvas.h"
+#include "TEfficiency.h"
 #include "TH1.h"
 #include "TH2.h"
 #include "TMath.h"
 #include "TRandom.h"
 #include "TString.h"
 
+#include <cmath>
 #include <iostream>
 #include <string>
+#include <unordered_map>
 
 #include "../Histos.h"
 
@@ -38,8 +41,14 @@ std::pair<double, double> SampleCM()
     return {theta, phi};
 }
 
+void ApplyNaN(double& e, double t = 0, const std::string& comment = "stopped")
+{
+    if(e <= t)
+        e = std::nan(comment.c_str());
+}
+
 void do_simu(const std::string& beam, const std::string& target, const std::string& light, double Tbeam, double Ex,
-             bool inspect)
+             const std::unordered_map<std::string, double>& opts, bool inspect)
 {
     // Set number of iterations
     auto niter {static_cast<int>(1e6)};
@@ -70,6 +79,9 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
 
     // Declare histograms
     auto hKin {Histos::Kin.GetHistogram()};
+    hKin->SetTitle("Sampled kinematics");
+    auto hKinRec {Histos::Kin.GetHistogram()};
+    hKinRec->SetTitle("Reconstructed kinematics");
     auto hSP {Histos::SP.GetHistogram()};
     auto hRP {Histos::RP.GetHistogram()};
     auto hThetaCMAll {Histos::ThetaCM.GetHistogram()};
@@ -105,12 +117,42 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         if(silIndex0 == -1)
             continue;
 
-        // Test
-        hKin->Fill(theta3Lab * TMath::RadToDeg(), T3Lab);
-        hRP->Fill(vertex.X(), vertex.Y());
-        hSP->Fill(silPoint0.Y(), silPoint0.Z());
-        hThetaCM->Fill(thetaCM * TMath::RadToDeg()); // only thetaCm that enter our cuts
+        // Slow down light in gas
+        auto T3AtSil {srim->SlowWithStraggling("light", T3Lab, (silPoint0 - vertex).R())};
+        // CHeck if stopped
+        ApplyNaN(T3AtSil);
+        if(std::isnan(T3AtSil))
+            continue;
+        // Slow down in silicon
+        auto normal {sils->GetLayer("f0").GetNormal()};
+        auto angleWithNormal {TMath::ACos(direction.Unit().Dot(normal.Unit()))};
+        auto T3AfterSil0 {srim->SlowWithStraggling("lightInSil", T3AtSil, sils->GetLayer("f0").GetUnit().GetThickness(),
+                                                   angleWithNormal)};
+        auto eLoss0 {T3AtSil - T3AfterSil0};
+        ApplyNaN(eLoss0, sils->GetLayer("f0").GetThresholds().at(silIndex0));
+        if(std::isnan(eLoss0))
+            continue;
+
+        // Reconstruct!
+        bool isOk {T3AfterSil0 == 0}; // no punchthrouhg
+        if(isOk)
+        {
+            // Assuming no punchthrough!
+            auto T3Rec {srim->EvalInitialEnergy("light", eLoss0, (silPoint0 - vertex).R())};
+            auto ExRec {kin->ReconstructExcitationEnergy(T3Rec, theta3Lab)};
+
+            // Fill
+            hKin->Fill(theta3Lab * TMath::RadToDeg(), T3Lab);    // before uncertainties implemented
+            hKinRec->Fill(theta3Lab * TMath::RadToDeg(), T3Rec); // after reconstruction
+            hRP->Fill(vertex.X(), vertex.Y());
+            hSP->Fill(silPoint0.Y(), silPoint0.Z());
+            hThetaCM->Fill(thetaCM * TMath::RadToDeg()); // only thetaCm that enter our cuts
+        }
     }
+
+    // Compute efficiency
+    auto* eff {new TEfficiency {*hThetaCM, *hThetaCMAll}};
+    eff->SetNameTitle("eff", "#theta_{CM} efficiency;#epsilon;#theta_{CM} [#circ]");
 
     // Draw if not running for multiple Exs
     if(inspect)
@@ -124,16 +166,24 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         auto* gtheo {kin->GetKinematicLine3()};
         gtheo->Draw("l");
         c0->cd(2);
+        hKinRec->DrawClone("colz");
+        gtheo->Draw("l");
+        c0->cd(3);
         hSP->DrawClone("colz");
         sils->GetLayer("f0").GetSilMatrix()->Draw();
-        c0->cd(3);
-        hRP->DrawClone("colz");
         c0->cd(4);
+        hRP->DrawClone("colz");
+        c0->cd(5);
         hThetaCMAll->SetTitle("All #theta_{CM}");
         hThetaCMAll->DrawClone();
-        c0->cd(5);
+        c0->cd(6);
         hThetaCM->SetTitle("#theta_{CM} in cuts");
         hThetaCM->DrawClone();
+
+        auto* c1 {new TCanvas {"c1", "Sim inspect 1"}};
+        c1->DivideSquare(6);
+        c1->cd(1);
+        eff->Draw("apl");
     }
 }
 #endif
