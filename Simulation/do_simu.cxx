@@ -143,8 +143,8 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         auto angleWithNormal {TMath::ACos(direction.Unit().Dot(normal.Unit()))};
         auto T3AfterSil0 {srim->SlowWithStraggling("lightInSil", T3AtSil, sils->GetLayer("f0").GetUnit().GetThickness(),
                                                    angleWithNormal)};
-        auto T3AfterSil0Res {gRandom->Gaus(T3AfterSil0, silRes->Eval(T3AfterSil0))};
-        auto eLoss0 {T3AtSil - T3AfterSil0Res};
+        auto eLoss0preSilRes {T3AtSil - T3AfterSil0};
+        auto eLoss0 {gRandom->Gaus(eLoss0preSilRes, silRes->Eval(eLoss0preSilRes))};  // after silicon resolution
         ApplyNaN(eLoss0, sils->GetLayer("f0").GetThresholds().at(silIndex0));
         if(std::isnan(eLoss0))
             continue;
