@@ -13,6 +13,7 @@
 #include "TMath.h"
 #include "TRandom.h"
 #include "TString.h"
+#include "TGraphErrors.h"
 
 #include <cmath>
 #include <iostream>
@@ -54,6 +55,39 @@ void ApplyThetaRes(double& theta)
     theta = gRandom->Gaus(theta, sigma * TMath::DegToRad());
 }
 
+TF1* GetEcmSampler(std::string filename)
+{
+    auto graphEcm {new TGraphErrors("../Inputs/Mg20p_150_A_tot30keV.dat", "%lg %lg")};
+    auto functionEcm {new TF1("fEcm", [=](double* x, double* p){return graphEcm->Eval(x[0], nullptr, "s");}, 0, 6, 0)};
+    return functionEcm;
+}
+
+TF1* GetEcmRPRelation(ActPhysics::Kinematics* kin, ActPhysics::SRIM* srim, double Tbeam)
+{
+    auto massSum {kin->GetMass(1) + kin->GetMass(2)};
+
+    auto* gcorr {new TGraphErrors};
+    gcorr->SetTitle("#font[12]{Resonant} E_{CM};RP.X() [mm];E_{CM} [MeV]");
+    gcorr->SetLineWidth(2);
+
+    double x0 {0};
+    double x1 {256};
+    double step {1};
+    for(double x = x0; x <= x1; x += step)
+    {
+        auto TbeamCorr {srim->Slow("beam", Tbeam, x)};
+        kin->SetBeamEnergy(TbeamCorr);
+        auto cm {kin->GetECM()};
+        gcorr->AddPoint(x, cm - massSum);
+        // gcorr->AddPoint(x, kin->GetResonantECM());
+        // This is equivalent to calling now kin->GetResonantECM()
+    }
+
+    auto fucntionEcmRp {new TF1("fEcmRP", [=](double* x, double* p){return gcorr->Eval(x[0], nullptr, "s");}, 0, 6, 0)};
+
+    return fucntionEcmRp;
+}
+
 void do_simu(const std::string& beam, const std::string& target, const std::string& light, double Tbeam, double Ex,
              const std::unordered_map<std::string, double>& opts, bool inspect)
 {
@@ -80,12 +114,16 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
 
     // SRIM
     auto* srim {new ActPhysics::SRIM};
-    srim->ReadTable("beam", TString::Format("../SRIM files/%s_Butane_160Torr.txt", beam.c_str()).Data());
-    srim->ReadTable("light", TString::Format("../SRIM files/%s_Butane_160Torr.txt", light.c_str()).Data());
+    srim->ReadTable("beam", TString::Format("../SRIM files/%s_Butane_160mbar.txt", beam.c_str()).Data());
+    srim->ReadTable("light", TString::Format("../SRIM files/%s_Butane_160mbar.txt", light.c_str()).Data());
     srim->ReadTable("lightInSil", TString::Format("../SRIM files/%s_silicon.txt", light.c_str()).Data());
 
     // Kinematics
     auto* kin {new ActPhysics::Kinematics {beam, target, light, Tbeam, Ex}};
+
+    // Ecm sampler and Ecm-rp.X relation
+    auto* ecmSampler {GetEcmSampler("../Inputs/Mg20p_150_A_tot30keV.dat")};
+    auto* ecmRPrelation {GetEcmRPRelation(kin, srim, Tbeam)};
 
     // Declare histograms
     auto hKin {Histos::Kin.GetHistogram()};
