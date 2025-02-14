@@ -4,7 +4,7 @@
 namespace Histos
 {
 // Ex
-const ROOT::RDF::TH1DModel Ex {"hEx", "Ex;Ex [MeV];Counts", 300, -5, 10};
+const ROOT::RDF::TH1DModel Ex {"hEx", "Ex;Ex [MeV];Counts", 400, -5, 10};
 
 // Ecm
 const ROOT::RDF::TH1DModel Ecm {"hEcm", "Ecm;E_{CM} [MeV];Counts", 300, -5, 10};

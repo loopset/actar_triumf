@@ -7,12 +7,12 @@
 
 #include "TCanvas.h"
 #include "TEfficiency.h"
+#include "TF1.h"
 #include "TH1.h"
 #include "TH2.h"
 #include "TMath.h"
 #include "TRandom.h"
 #include "TString.h"
-#include "TF1.h"
 
 #include <cmath>
 #include <iostream>
@@ -46,6 +46,12 @@ void ApplyNaN(double& e, double t = 0, const std::string& comment = "stopped")
 {
     if(e <= t)
         e = std::nan(comment.c_str());
+}
+
+void ApplyThetaRes(double& theta)
+{
+    double sigma {0.95 / 2.355}; // FWHM to sigma
+    theta = gRandom->Gaus(theta, sigma * TMath::DegToRad());
 }
 
 void do_simu(const std::string& beam, const std::string& target, const std::string& light, double Tbeam, double Ex,
@@ -90,6 +96,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     auto hRP {Histos::RP.GetHistogram()};
     auto hThetaCMAll {Histos::ThetaCM.GetHistogram()};
     auto hThetaCM {Histos::ThetaCM.GetHistogram()};
+    auto hEx {Histos::Ex.GetHistogram()};
 
     for(int it = 0; it < niter; it++)
     {
@@ -109,6 +116,10 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         // Extract direction
         auto T3Lab {kin->GetT3Lab()};
         auto theta3Lab {kin->GetTheta3Lab()};
+        // Save without resolution
+        auto theta3LabSampled {theta3Lab};
+        // Apply angle resolution
+        ApplyThetaRes(theta3Lab);
         auto phi3Lab {kin->GetPhi3Lab()};
         XYZVector direction {TMath::Cos(theta3Lab), TMath::Sin(theta3Lab) * TMath::Sin(phi3Lab),
                              TMath::Sin(theta3Lab) * TMath::Cos(phi3Lab)};
@@ -147,8 +158,9 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
             auto ExRec {kin->ReconstructExcitationEnergy(T3Rec, theta3Lab)};
 
             // Fill
-            hKin->Fill(theta3Lab * TMath::RadToDeg(), T3Lab);    // before uncertainties implemented
-            hKinRec->Fill(theta3Lab * TMath::RadToDeg(), T3Rec); // after reconstruction
+            hKin->Fill(theta3LabSampled * TMath::RadToDeg(), T3Lab); // before uncertainties implemented
+            hKinRec->Fill(theta3Lab * TMath::RadToDeg(), T3Rec);     // after reconstruction
+            hEx->Fill(ExRec);
             hRP->Fill(vertex.X(), vertex.Y());
             hSP->Fill(silPoint0.Y(), silPoint0.Z());
             hThetaCM->Fill(thetaCM * TMath::RadToDeg()); // only thetaCm that enter our cuts
@@ -189,6 +201,8 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         c1->DivideSquare(6);
         c1->cd(1);
         eff->Draw("apl");
+        c1->cd(2);
+        hEx->DrawClone();
     }
 }
 #endif
