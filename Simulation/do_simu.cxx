@@ -8,12 +8,12 @@
 #include "TCanvas.h"
 #include "TEfficiency.h"
 #include "TF1.h"
+#include "TGraphErrors.h"
 #include "TH1.h"
 #include "TH2.h"
 #include "TMath.h"
 #include "TRandom.h"
 #include "TString.h"
-#include "TGraphErrors.h"
 
 #include <cmath>
 #include <iostream>
@@ -58,17 +58,17 @@ void ApplyThetaRes(double& theta)
 TF1* GetEcmSampler(std::string filename)
 {
     auto graphEcm {new TGraphErrors("../Inputs/Mg20p_150_A_tot30keV.dat", "%lg %lg")};
-    auto functionEcm {new TF1("fEcm", [=](double* x, double* p){return graphEcm->Eval(x[0], nullptr, "s");}, 0, 3.7, 0)};
+    auto functionEcm {
+        new TF1("fEcm", [=](double* x, double* p) { return graphEcm->Eval(x[0], nullptr, "s"); }, 0, 3.7, 0)};
     return functionEcm;
 }
 
 TF1* GetEcmRPRelation(ActPhysics::Kinematics* kin, ActPhysics::SRIM* srim, double Tbeam)
 {
-    auto massSum {kin->GetMass(1) + kin->GetMass(2)};
-
-    auto* gcorr {new TGraphErrors};
-    gcorr->SetTitle("#font[12]{Resonant} E_{CM};RP.X() [mm];E_{CM} [MeV]");
-    gcorr->SetLineWidth(2);
+    auto* gRPxEcm {new TGraphErrors};
+    gRPxEcm->SetTitle("#font[12]{Resonant} E_{CM};RP.X() [mm];E_{CM} [MeV]");
+    gRPxEcm->SetLineWidth(2);
+    auto* gEcmRPx {new TGraphErrors};
 
     double x0 {0};
     double x1 {256};
@@ -77,15 +77,14 @@ TF1* GetEcmRPRelation(ActPhysics::Kinematics* kin, ActPhysics::SRIM* srim, doubl
     {
         auto TbeamCorr {srim->Slow("beam", Tbeam, x)};
         kin->SetBeamEnergy(TbeamCorr);
-        auto cm {kin->GetECM()};
-        gcorr->AddPoint(x, cm - massSum);
-        // gcorr->AddPoint(x, kin->GetResonantECM());
-        // This is equivalent to calling now kin->GetResonantECM()
+        gRPxEcm->AddPoint(x, kin->GetResonantECM());
+        if(TbeamCorr > 0)
+            gEcmRPx->AddPoint(kin->GetResonantECM(), x);
     }
 
-    auto fucntionEcmRp {new TF1("fEcmRP", [=](double* x, double* p){return gcorr->Eval(x[0], nullptr, "s");}, 0, 256, 0)};
-
-    return fucntionEcmRp;
+    auto funcEcmRPx {
+        new TF1("funcEcmRPx", [=](double* x, double* p) { return gEcmRPx->Eval(x[0], nullptr, "S"); }, 0, 20, 0)};
+    return funcEcmRPx;
 }
 
 void do_simu(const std::string& beam, const std::string& target, const std::string& light, double Tbeam, double Ex,
@@ -141,10 +140,10 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     {
         // Sample vertex and Ecm
         auto Ecm {ecmSampler->GetRandom()};
-        //std::cout<<"Searching for: "<<Ecm<<std::endl;
+        // std::cout<<"Searching for: "<<Ecm<<std::endl;
         auto vertex {SampleVertex(&tpc)};
-        vertex.SetX(eCMtoRP->GetX(Ecm));
-        //std::cout<<vertex.X()<<std::endl;
+        vertex.SetX(eCMtoRP->Eval(Ecm));
+        // std::cout<<vertex.X()<<std::endl;
 
         // Slow beam with straggling
         auto TbeamCorr {srim->SlowWithStraggling("beam", Tbeam, vertex.X())};
@@ -153,7 +152,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         // So far traditional approach. We have to change for Ecm sampling == sampling vertex.X() i think
         // thetaCM would be fixed in that case
         auto [thetaCM, phiCM] {SampleCM()};
-        thetaCM = 150 * TMath::Pi() / 180; // Fixed in 150 for Bea's data
+        thetaCM = 150 * TMath::DegToRad(); // Fixed in 150 for Bea's data
         // Generate lab kinematics for protons
         kin->ComputeRecoilKinematics(thetaCM, phiCM);
         // Fill thetaCMall
@@ -189,7 +188,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         auto T3AfterSil0 {srim->SlowWithStraggling("lightInSil", T3AtSil, sils->GetLayer("f0").GetUnit().GetThickness(),
                                                    angleWithNormal)};
         auto eLoss0preSilRes {T3AtSil - T3AfterSil0};
-        auto eLoss0 {gRandom->Gaus(eLoss0preSilRes, silRes->Eval(eLoss0preSilRes))};  // after silicon resolution
+        auto eLoss0 {gRandom->Gaus(eLoss0preSilRes, silRes->Eval(eLoss0preSilRes))}; // after silicon resolution
         ApplyNaN(eLoss0, sils->GetLayer("f0").GetThresholds().at(silIndex0));
         if(std::isnan(eLoss0))
             continue;
@@ -251,7 +250,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         hEx->DrawClone();
         c1->cd(3);
         hThetaCMThetaLab->DrawClone("colz");
-        auto* gCMLab {kin->GetKinematicLine3()};
+        auto* gCMLab {kin->GetThetaLabvsThetaCMLine()};
         gCMLab->Draw("l");
     }
 }
