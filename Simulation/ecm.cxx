@@ -20,7 +20,7 @@ void ecm()
     auto* gcm {new TGraphErrors};
     gcm->SetTitle("Plain E_{CM};RP.X() [mm];E_{CM} [MeV]");
     auto* gcorr {new TGraphErrors};
-    gcorr->SetTitle("#font[12]{Resonant} E_{CM};E_{CM} [MeV]; RP.X() [mm]");
+    gcorr->SetTitle("#font[12]{Resonant} E_{CM};RP.X() [mm]; E_{CM} [MeV]");
     for(auto g : {gcm, gcorr})
         g->SetLineWidth(2);
 
@@ -33,12 +33,12 @@ void ecm()
         kin->SetBeamEnergy(TbeamCorr);
         auto cm {kin->GetECM()};
         gcm->AddPoint(x, cm);
-        gcorr->AddPoint(cm - massSum, x);
+        gcorr->AddPoint(x, cm - massSum);
         // gcorr->AddPoint(x, kin->GetResonantECM());
         // This is equivalent to calling now kin->GetResonantECM()
     }
 
-    auto fEcmToRP {new TF1("fEcmToRP", [=](double* x, double* p){return gcorr->Eval(x[0], nullptr, "s");}, 0, 6, 0)};
+    auto fEcmToRP {new TF1("fEcmToRP", [=](double* x, double* p){return gcorr->Eval(x[0], nullptr, "s");}, 0, 256, 0)};
     std::cout<<fEcmToRP->Eval(5)<<std::endl;
 
     // Draw

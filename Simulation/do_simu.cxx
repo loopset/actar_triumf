@@ -78,14 +78,14 @@ TF1* GetEcmRPRelation(ActPhysics::Kinematics* kin, ActPhysics::SRIM* srim, doubl
         auto TbeamCorr {srim->Slow("beam", Tbeam, x)};
         kin->SetBeamEnergy(TbeamCorr);
         auto cm {kin->GetECM()};
-        gcorr->AddPoint(cm - massSum, x);
+        gcorr->AddPoint(x, cm - massSum);
         // gcorr->AddPoint(x, kin->GetResonantECM());
         // This is equivalent to calling now kin->GetResonantECM()
     }
 
-    auto fEcmToRP {new TF1("fEcmToRP", [=](double* x, double* p){return gcorr->Eval(x[0], nullptr, "s");}, 0, 256, 0)};
+    auto fucntionEcmRp {new TF1("fEcmRP", [=](double* x, double* p){return gcorr->Eval(x[0], nullptr, "s");}, 0, 256, 0)};
 
-    return fEcmToRP;
+    return fucntionEcmRp;
 }
 
 void do_simu(const std::string& beam, const std::string& target, const std::string& light, double Tbeam, double Ex,
@@ -141,12 +141,10 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     {
         // Sample vertex and Ecm
         auto Ecm {ecmSampler->GetRandom()};
-        std::cout<<Ecm<<std::endl;
+        //std::cout<<"Searching for: "<<Ecm<<std::endl;
         auto vertex {SampleVertex(&tpc)};
-        
-        vertex.SetX(eCMtoRP->Eval(Ecm));
-        //auto vertex {SampleVertex(&tpc)};
-        std::cout<<vertex.X()<<std::endl;
+        vertex.SetX(eCMtoRP->GetX(Ecm));
+        //std::cout<<vertex.X()<<std::endl;
 
         // Slow beam with straggling
         auto TbeamCorr {srim->SlowWithStraggling("beam", Tbeam, vertex.X())};
@@ -155,7 +153,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         // So far traditional approach. We have to change for Ecm sampling == sampling vertex.X() i think
         // thetaCM would be fixed in that case
         auto [thetaCM, phiCM] {SampleCM()};
-        //thetaCM = 150 * TMath::Pi() / 180; // Fixed in 150 for Bea's data
+        thetaCM = 150 * TMath::Pi() / 180; // Fixed in 150 for Bea's data
         // Generate lab kinematics for protons
         kin->ComputeRecoilKinematics(thetaCM, phiCM);
         // Fill thetaCMall
