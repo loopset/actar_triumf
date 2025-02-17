@@ -83,7 +83,7 @@ TF1* GetEcmRPRelation(ActPhysics::Kinematics* kin, ActPhysics::SRIM* srim, doubl
         // This is equivalent to calling now kin->GetResonantECM()
     }
 
-    auto fEcmToRP {new TF1("fEcmToRP", [=](double* y, double* p){return gcorr->Eval(y[0], nullptr, "s");}, 0, 256, 0)};
+    auto fEcmToRP {new TF1("fEcmToRP", [=](double* x, double* p){return gcorr->Eval(x[0], nullptr, "s");}, 0, 256, 0)};
 
     return fEcmToRP;
 }
