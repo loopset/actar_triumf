@@ -18,6 +18,10 @@ const ROOT::RDF::TH2DModel RP {"hRP", "RP;X [mm];Y [mm]", 200, -10, 300, 200, -1
 // Kin
 const ROOT::RDF::TH2DModel Kin {"hKin", "Kinematics;#theta_{light, Lab} [#circ];E_{light} [MeV]", 350, 0, 95, 350, 0,
                                 40};
+                                
+// Theta Lab vs Theta CM 
+const ROOT::RDF::TH2DModel ThetaCMThetaLab {"hThetaCMThetaLab", "ThetaCM vs ThetaLab; #theta_{CM} [deg]; #theta_{Lab} [deg]",
+                                180, 0, 180, 180, 0, 180};
 
 // Efficiency
 const ROOT::RDF::TH1DModel ThetaCM {"hThetaCM", "ThetaCM;#theta_{CM} [#circ]", 600, 0, 180};

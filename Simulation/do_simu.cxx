@@ -92,7 +92,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
              const std::unordered_map<std::string, double>& opts, bool inspect)
 {
     // Set number of iterations
-    auto niter {static_cast<int>(1e6)};
+    auto niter {static_cast<int>(1e5)};
 
     // Initialize detectors
     // TPC
@@ -123,7 +123,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
 
     // Ecm sampler and Ecm-rp.X relation
     auto* ecmSampler {GetEcmSampler("../Inputs/Mg20p_150_A_tot30keV.dat")};
-    auto* ecmRPrelation {GetEcmRPRelation(kin, srim, Tbeam)};
+    auto* eCMtoRP {GetEcmRPRelation(kin, srim, Tbeam)};
 
     // Declare histograms
     auto hKin {Histos::Kin.GetHistogram()};
@@ -135,11 +135,16 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     auto hThetaCMAll {Histos::ThetaCM.GetHistogram()};
     auto hThetaCM {Histos::ThetaCM.GetHistogram()};
     auto hEx {Histos::Ex.GetHistogram()};
+    auto hThetaCMThetaLab {Histos::ThetaCMThetaLab.GetHistogram()};
 
     for(int it = 0; it < niter; it++)
     {
-        // Sample vertex
+        // Sample vertex and Ecm
+        auto Ecm {ecmSampler->GetRandom()};
         auto vertex {SampleVertex(&tpc)};
+        vertex.SetX(eCMtoRP->Eval(Ecm));
+        //auto vertex {SampleVertex(&tpc)};
+
         // Slow beam with straggling
         auto TbeamCorr {srim->SlowWithStraggling("beam", Tbeam, vertex.X())};
         kin->SetBeamEnergy(TbeamCorr);
@@ -147,13 +152,15 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         // So far traditional approach. We have to change for Ecm sampling == sampling vertex.X() i think
         // thetaCM would be fixed in that case
         auto [thetaCM, phiCM] {SampleCM()};
+        thetaCM = 150 * TMath::Pi() / 180; // Fixed in 150 for Bea's data
         // Generate lab kinematics for protons
         kin->ComputeRecoilKinematics(thetaCM, phiCM);
         // Fill thetaCMall
-        hThetaCMAll->Fill(thetaCM * TMath::RadToDeg());
+        hThetaCMAll->Fill(kin->GetThetaCM() * TMath::RadToDeg());
         // Extract direction
         auto T3Lab {kin->GetT3Lab()};
         auto theta3Lab {kin->GetTheta3Lab()};
+        std::cout<<theta3Lab * 180 / TMath::Pi()<<std::endl;
         // Save without resolution
         auto theta3LabSampled {theta3Lab};
         // Apply angle resolution
@@ -202,6 +209,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
             hRP->Fill(vertex.X(), vertex.Y());
             hSP->Fill(silPoint0.Y(), silPoint0.Z());
             hThetaCM->Fill(thetaCM * TMath::RadToDeg()); // only thetaCm that enter our cuts
+            hThetaCMThetaLab->Fill(thetaCM * TMath::RadToDeg(), theta3Lab * TMath::RadToDeg());
         }
     }
 
@@ -241,6 +249,10 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         eff->Draw("apl");
         c1->cd(2);
         hEx->DrawClone();
+        c1->cd(3);
+        hThetaCMThetaLab->DrawClone("colz");
+        auto* gCMLab {kin->GetKinematicLine3()};
+        gCMLab->Draw("l");
     }
 }
 #endif
