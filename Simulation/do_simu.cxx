@@ -112,9 +112,10 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     // sils->DrawGeo();
 
     // SRIM
+    double pressure {opts.at("pressure")};
     auto* srim {new ActPhysics::SRIM};
-    srim->ReadTable("beam", TString::Format("../SRIM files/%s_Butane_180mbar.txt", beam.c_str()).Data());
-    srim->ReadTable("light", TString::Format("../SRIM files/%s_Butane_180mbar.txt", light.c_str()).Data());
+    srim->ReadTable("beam", TString::Format("../SRIM files/%s_Butane_%.0fmbar.txt", beam.c_str(), pressure).Data());
+    srim->ReadTable("light", TString::Format("../SRIM files/%s_Butane_%.0fmbar.txt", light.c_str(), pressure).Data());
     srim->ReadTable("lightInSil", TString::Format("../SRIM files/%s_silicon.txt", light.c_str()).Data());
 
     // Kinematics

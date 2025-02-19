@@ -17,7 +17,7 @@ void runner(TString what = "plot", bool inspect = true)
     std::vector<double> Exs {0}; // 20Mg gs only
     // How to pass other options to simulation?
     // I propose this
-    std::unordered_map<std::string, double> opts {{"pressure", 160}};
+    std::unordered_map<std::string, double> opts {{"pressure", 180}};
 
     // Run simu or plot
     if(what.Contains("simu"))
