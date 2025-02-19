@@ -113,8 +113,8 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
 
     // SRIM
     auto* srim {new ActPhysics::SRIM};
-    srim->ReadTable("beam", TString::Format("../SRIM files/%s_Butane_160mbar.txt", beam.c_str()).Data());
-    srim->ReadTable("light", TString::Format("../SRIM files/%s_Butane_160mbar.txt", light.c_str()).Data());
+    srim->ReadTable("beam", TString::Format("../SRIM files/%s_Butane_180mbar.txt", beam.c_str()).Data());
+    srim->ReadTable("light", TString::Format("../SRIM files/%s_Butane_180mbar.txt", light.c_str()).Data());
     srim->ReadTable("lightInSil", TString::Format("../SRIM files/%s_silicon.txt", light.c_str()).Data());
 
     // Kinematics
