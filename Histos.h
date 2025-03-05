@@ -15,6 +15,9 @@ const ROOT::RDF::TH2DModel SP {"hSP", "SP;X or Y [mm];Z [mm]", 200, -10, 300, 20
 // RP
 const ROOT::RDF::TH2DModel RP {"hRP", "RP;X [mm];Y [mm]", 200, -10, 300, 200, -10, 300};
 
+// RP vs E
+const ROOT::RDF::TH2DModel RP_E {"hRP", "RPvsE;RP.X() [mm];E [MeV]", 200, -10, 300, 200, 0, 40};
+
 // Kin
 const ROOT::RDF::TH2DModel Kin {"hKin", "Kinematics;#theta_{light, Lab} [#circ];E_{light} [MeV]", 350, 0, 95, 350, 0,
                                 40};

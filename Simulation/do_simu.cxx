@@ -58,8 +58,32 @@ void ApplyThetaRes(double& theta)
 TF1* GetEcmSampler(std::string filename)
 {
     auto graphEcm {new TGraphErrors("../Inputs/Mg20p_150_A_tot30keV.dat", "%lg %lg")};
+
+    int nPoints = graphEcm->GetN();
+    double lastX, lastY;
+    graphEcm->GetPoint(nPoints - 1, lastX, lastY);
+
+    std::cout<<nPoints<<std::endl;
+    std::cout<<lastX<<std::endl;
+
+    if (lastX < 6.4)
+    {
+        double step = 0.01;
+        for (double x = lastX + step; x <= 6.3; x += step)
+        {
+            graphEcm->AddPoint(x, lastY);
+        }
+    }
+
+    int nPoints1 = graphEcm->GetN();
+    double lastX1, lastY1;
+    graphEcm->GetPoint(nPoints1 - 1, lastX1, lastY1);
+
+    std::cout<<nPoints1<<std::endl;
+    std::cout<<lastX1<<std::endl;
+
     auto functionEcm {
-        new TF1("fEcm", [=](double* x, double* p) { return graphEcm->Eval(x[0], nullptr, "s"); }, 0, 3.7, 0)};
+        new TF1("fEcm", [=](double* x, double* p) { return graphEcm->Eval(x[0], nullptr, "s"); }, 0, 6.2, 0)};
     return functionEcm;
 }
 
@@ -136,6 +160,8 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     auto hThetaCM {Histos::ThetaCM.GetHistogram()};
     auto hEx {Histos::Ex.GetHistogram()};
     auto hThetaCMThetaLab {Histos::ThetaCMThetaLab.GetHistogram()};
+    auto hRPxE {Histos::RP_E.GetHistogram()};
+    auto hRPxEStoppedGas {Histos::RP_E.GetHistogram()};
 
     for(int it = 0; it < niter; it++)
     {
@@ -182,7 +208,10 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         // CHeck if stopped
         ApplyNaN(T3AtSil);
         if(std::isnan(T3AtSil))
+        {
+            hRPxEStoppedGas->Fill(vertex.X(), T3Lab);
             continue;
+        }
         // Slow down in silicon
         auto normal {sils->GetLayer("f0").GetNormal()};
         auto angleWithNormal {TMath::ACos(direction.Unit().Dot(normal.Unit()))};
@@ -196,7 +225,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
 
         // Reconstruct!
         bool isOk {T3AfterSil0 == 0}; // no punchthrouhg
-        if(isOk)
+        if(true)
         {
             // Assuming no punchthrough!
             auto T3Rec {srim->EvalInitialEnergy("light", eLoss0, (silPoint0 - vertex).R())};
@@ -210,6 +239,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
             hSP->Fill(silPoint0.Y(), silPoint0.Z());
             hThetaCM->Fill(thetaCM * TMath::RadToDeg()); // only thetaCm that enter our cuts
             hThetaCMThetaLab->Fill(thetaCM * TMath::RadToDeg(), theta3Lab * TMath::RadToDeg());
+            hRPxE->Fill(vertex.X(), T3Rec);
         }
     }
 
@@ -253,6 +283,21 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         hThetaCMThetaLab->DrawClone("colz");
         auto* gCMLab {kin->GetThetaLabvsThetaCMLine()};
         gCMLab->Draw("l");
+        c1->cd(4);
+        hRPxE->DrawClone();
+        c1->cd(5);
+        hRPxEStoppedGas->DrawClone();
+
+        auto* cEff {new TCanvas {"cEff", "Eff in RPx intervals"}};
+
+        auto cEcm = new TCanvas("cEcm", "Resonant E_{CM} vs RP.X()");
+        cEcm->DivideSquare(2);
+        cEcm->cd(1);
+        eCMtoRP->SetLineColor(kBlue);
+        eCMtoRP->SetLineWidth(2);
+        eCMtoRP->Draw();
+        cEcm->cd(2);
+        ecmSampler->Draw();
     }
 }
 #endif
