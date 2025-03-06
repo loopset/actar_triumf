@@ -130,6 +130,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     // In real life beam window is not at Z / 2
     for(auto& [name, layer] : sils->GetLayers())
         layer.MoveZTo(tpc.Z() / 2, {5, 6, 7, 8, 9});
+    sils->DrawGeo();
     std::cout << "Sils Z centred at : " << tpc.Z() / 2 << " mm" << '\n';
     // This means: make the Z of silicons {5,6,...} be that zOfBeam.
     // shift the others accordingly
@@ -160,7 +161,10 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     auto hThetaCM {Histos::ThetaCM.GetHistogram()};
     auto hEx {Histos::Ex.GetHistogram()};
     auto hThetaCMThetaLab {Histos::ThetaCMThetaLab.GetHistogram()};
-    auto hRPxE {Histos::RP_E.GetHistogram()};
+    auto hRPxEfirstSil {Histos::RP_E.GetHistogram()};
+    hRPxEfirstSil->SetTitle("RPvsE if just 1 Sil");
+    auto hRPxEbothSil {Histos::RP_E.GetHistogram()};
+    hRPxEbothSil->SetTitle("RPvsE if 2 Sil");
     auto hRPxEStoppedGas {Histos::RP_E.GetHistogram()};
 
     for(int it = 0; it < niter; it++)
@@ -205,7 +209,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
 
         // Slow down light in gas
         auto T3AtSil {srim->SlowWithStraggling("light", T3Lab, (silPoint0 - vertex).R())};
-        // CHeck if stopped
+        // Check if stopped
         ApplyNaN(T3AtSil);
         if(std::isnan(T3AtSil))
         {
@@ -223,12 +227,55 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         if(std::isnan(eLoss0))
             continue;
 
+
+        // Apply 2nd layer of silicons
+        double T3AfterInterGas {};
+        int silIndex1 {};
+        ROOT::Math::XYZPoint silPoint1 {};
+        double eLoss1 {};
+        if(T3AfterSil0 > 0.) 
+        {
+            std::tie(silIndex1, silPoint1) = sils->FindSPInLayer("f1", vertex, direction);
+            if(silIndex1 == -1)
+            {} // If a silicon is not reached, don't continue with punchthough calculation
+            else
+            {
+                T3AfterInterGas = {srim->SlowWithStraggling("light", T3AfterSil0, (silPoint0 - silPoint1).R())};
+                if(T3AfterInterGas == 0)
+                {} // If slow in gas don't continue with calculation
+                else
+                {
+                    auto T3AfterSil1 {srim->SlowWithStraggling("lightInSil", T3AfterInterGas, sils->GetLayer("f1").GetUnit().GetThickness(),
+                                                   angleWithNormal)};
+                    auto eLoss1preSilRes {T3AfterInterGas - T3AfterSil1};
+                    eLoss1 = gRandom->Gaus(eLoss1preSilRes, silRes->Eval(eLoss1preSilRes)); // after silicon resolution
+                    ApplyNaN(eLoss1, sils->GetLayer("f1").GetThresholds().at(silIndex1));
+                    if(std::isnan(eLoss1))
+                        eLoss1 = 0;
+                }
+            }
+        }
         // Reconstruct!
         bool isOk {T3AfterSil0 == 0}; // no punchthrouhg
         if(true)
         {
             // Assuming no punchthrough!
-            auto T3Rec {srim->EvalInitialEnergy("light", eLoss0, (silPoint0 - vertex).R())};
+            double T3Rec {};
+            if(eLoss1 == 0)
+            {
+                T3Rec = srim->EvalInitialEnergy("light", eLoss0, (silPoint0 - vertex).R());
+                hRPxEfirstSil->Fill(vertex.X(), T3Rec);
+            }
+            else
+            {
+                auto T3Rec0 {srim->EvalInitialEnergy("light", eLoss0, (silPoint0 - vertex).R())};
+                hRPxEfirstSil->Fill(vertex.X(), T3Rec0); // This is to show what would be obtained if there was just one sil
+
+                // Reconstruction ob T3 with 2 silicon layers
+                auto T3Rec1 {srim->EvalInitialEnergy("light", eLoss1, (silPoint1 - silPoint0).R())};
+                T3Rec = srim->EvalInitialEnergy("light", eLoss0+T3Rec1, (silPoint0 - vertex).R());
+            }
+
             auto ExRec {kin->ReconstructExcitationEnergy(T3Rec, theta3Lab)};
 
             // Fill
@@ -239,7 +286,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
             hSP->Fill(silPoint0.Y(), silPoint0.Z());
             hThetaCM->Fill(thetaCM * TMath::RadToDeg()); // only thetaCm that enter our cuts
             hThetaCMThetaLab->Fill(thetaCM * TMath::RadToDeg(), theta3Lab * TMath::RadToDeg());
-            hRPxE->Fill(vertex.X(), T3Rec);
+            hRPxEbothSil->Fill(vertex.X(), T3Rec);
         }
     }
 
@@ -284,8 +331,10 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         auto* gCMLab {kin->GetThetaLabvsThetaCMLine()};
         gCMLab->Draw("l");
         c1->cd(4);
-        hRPxE->DrawClone();
+        hRPxEfirstSil->DrawClone();
         c1->cd(5);
+        hRPxEbothSil->DrawClone();
+        c1->cd(6);
         hRPxEStoppedGas->DrawClone();
 
         auto* cEff {new TCanvas {"cEff", "Eff in RPx intervals"}};
