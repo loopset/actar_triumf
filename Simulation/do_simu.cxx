@@ -14,6 +14,8 @@
 #include "TMath.h"
 #include "TRandom.h"
 #include "TString.h"
+#include "TFile.h"
+#include "TTree.h"
 
 #include <cmath>
 #include <iostream>
@@ -97,7 +99,7 @@ TF1* GetEcmSampler(std::string filename)
     return functionEcm;
 }
 
-TF1* GetEcmRPRelation(ActPhysics::Kinematics* kin, ActPhysics::SRIM* srim, double Tbeam)
+TF1* GetEcmRPRelation(ActPhysics::Kinematics* kin, ActPhysics::SRIM* srim, double Tbeam, double Ex)
 {
     auto* gRPxEcm {new TGraphErrors};
     gRPxEcm->SetTitle("#font[12]{Resonant} E_{CM};RP.X() [mm];E_{CM} [MeV]");
@@ -110,6 +112,10 @@ TF1* GetEcmRPRelation(ActPhysics::Kinematics* kin, ActPhysics::SRIM* srim, doubl
     for(double x = x0; x <= x1; x += step)
     {
         auto TbeamCorr {srim->Slow("beam", Tbeam, x)};
+        auto beamThreshold {ActPhysics::Kinematics(kin->GetParticle(0), kin->GetParticle(1), kin->GetParticle(2), -1, Ex).GetT1Thresh()};
+        std::cout<<beamThreshold<<std::endl;
+        if(std::isnan(TbeamCorr) || TbeamCorr < beamThreshold){
+            continue;}
         kin->SetBeamEnergy(TbeamCorr);
         gRPxEcm->AddPoint(x, kin->GetResonantECM());
         if(TbeamCorr > 0)
@@ -124,6 +130,7 @@ TF1* GetEcmRPRelation(ActPhysics::Kinematics* kin, ActPhysics::SRIM* srim, doubl
 void do_simu(const std::string& beam, const std::string& target, const std::string& light, double Tbeam, double Ex,
              const std::unordered_map<std::string, double>& opts, bool inspect)
 {
+    gRandom->SetSeed(0);
     // Set number of iterations
     auto niter {static_cast<int>(1e5)};
 
@@ -158,7 +165,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
 
     // Ecm sampler and Ecm-rp.X relation
     auto* ecmSampler {GetEcmSampler("../Inputs/Mg20p_150_A_tot30keV.dat")};
-    auto* eCMtoRP {GetEcmRPRelation(kin, srim, Tbeam)};
+    auto* eCMtoRP {GetEcmRPRelation(kin, srim, Tbeam, Ex)};
 
     // Declare histograms
     auto hKin {Histos::Kin.GetHistogram()};
@@ -179,6 +186,22 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     auto hRPeffAll {Histos::RP_eff.GetHistogram()};
     auto hRPeffIn {Histos::RP_eff.GetHistogram()};
 
+    // Output file
+    TString fileName {
+        TString::Format("../Outputs/%.1fAMeV/transfer_TRIUMF_%s_Eex_%.3f.root", Tbeam / 20, beam.c_str(), Ex)};
+    auto* outFile {new TFile(fileName, "recreate")};
+    auto* outTree {new TTree("SimulationTTree", "A TTree containing only our Eex obtained by simulation")};
+    double theta3CM_tree {};
+    outTree->Branch("theta3CM", &theta3CM_tree);
+    double Eex_tree {};
+    outTree->Branch("Eex", &Eex_tree);
+    double RP_tree {};
+    outTree->Branch("RP", &RP_tree);
+    double theta3Lab_tree {};
+    outTree->Branch("theta3Lab", &theta3Lab_tree);
+    double phi3CM_tree {};
+    outTree->Branch("phi3CM", &phi3CM_tree);
+
     for(int it = 0; it < niter; it++)
     {
         // Sample vertex and Ecm
@@ -188,9 +211,12 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         vertex.SetX(eCMtoRP->Eval(Ecm));
         hRPeffAll->Fill(vertex.X());
         // std::cout<<vertex.X()<<std::endl;
-
+        
         // Slow beam with straggling
         auto TbeamCorr {srim->SlowWithStraggling("beam", Tbeam, vertex.X())};
+        auto beamThreshold {ActPhysics::Kinematics(beam, target, light, -1, Ex).GetT1Thresh()};
+        if(std::isnan(TbeamCorr) || TbeamCorr < beamThreshold){
+            continue;}
         kin->SetBeamEnergy(TbeamCorr);
         // Sample Ex/Ecm/thetaCM...
         // So far traditional approach. We have to change for Ecm sampling == sampling vertex.X() i think
@@ -301,6 +327,14 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
             hThetaCMThetaLab->Fill(thetaCM * TMath::RadToDeg(), theta3Lab * TMath::RadToDeg());
             hRPxEbothSil->Fill(vertex.X(), T3Rec);
             hRPeffIn->Fill(vertex.X());
+
+            // write to TTree
+            Eex_tree = ExRec;
+            theta3CM_tree = thetaCM * TMath::RadToDeg();
+            RP_tree = vertex.X();
+            theta3Lab_tree = theta3Lab * TMath::RadToDeg();
+            phi3CM_tree = phiCM;
+            outTree->Fill();
         }
     }
 

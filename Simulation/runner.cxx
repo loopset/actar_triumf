@@ -14,7 +14,7 @@ void runner(TString what = "plot", bool inspect = true)
     // Beam energy
     double Tbeam {130}; // MeV
     // Vector with Exs
-    std::vector<double> Exs {0}; // 20Mg gs only
+    std::vector<double> Exs {1.5981}; // 20Mg gs only
     // How to pass other options to simulation?
     // I propose this
     std::unordered_map<std::string, double> opts {{"pressure", 180}};
