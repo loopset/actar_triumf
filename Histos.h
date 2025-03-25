@@ -16,7 +16,10 @@ const ROOT::RDF::TH2DModel SP {"hSP", "SP;X or Y [mm];Z [mm]", 200, -10, 300, 20
 const ROOT::RDF::TH2DModel RP {"hRP", "RP;X [mm];Y [mm]", 200, -10, 300, 200, -10, 300};
 
 // RP vs E
-const ROOT::RDF::TH2DModel RP_E {"hRP", "RPvsE;RP.X() [mm];E [MeV]", 200, -10, 300, 200, 0, 40};
+const ROOT::RDF::TH2DModel RP_E {"hRPE", "RPvsE;RP.X() [mm];E [MeV]", 200, -10, 300, 200, 0, 40};
+
+// Eficiency RP
+const ROOT::RDF::TH1DModel RP_eff {"hRPeff", "RPeff;RP.X() [mm]", 13, 0, 260};
 
 // Kin
 const ROOT::RDF::TH2DModel Kin {"hKin", "Kinematics;#theta_{light, Lab} [#circ];E_{light} [MeV]", 350, 0, 95, 350, 0,

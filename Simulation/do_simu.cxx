@@ -60,18 +60,28 @@ TF1* GetEcmSampler(std::string filename)
     auto graphEcm {new TGraphErrors("../Inputs/Mg20p_150_A_tot30keV.dat", "%lg %lg")};
 
     int nPoints = graphEcm->GetN();
-    double lastX, lastY;
+    double lastX, lastY, firstX, firstY;
+    graphEcm->GetPoint(0, firstX, firstY);
     graphEcm->GetPoint(nPoints - 1, lastX, lastY);
 
     std::cout<<nPoints<<std::endl;
     std::cout<<lastX<<std::endl;
 
+    double step = 0.01;
+    // Expand to the right if necessary
     if (lastX < 6.4)
     {
-        double step = 0.01;
         for (double x = lastX + step; x <= 6.3; x += step)
         {
             graphEcm->AddPoint(x, lastY);
+        }
+    }
+    // Expand to the left if necessary
+    if (firstX > 0.1)
+    {
+        for (double x = firstX - step; x >= 0; x -= step)
+        {
+            graphEcm->AddPoint(x, firstY);
         }
     }
 
@@ -129,7 +139,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     // We have to centre the silicons with the beam input
     // In real life beam window is not at Z / 2
     for(auto& [name, layer] : sils->GetLayers())
-        layer.MoveZTo(tpc.Z() / 2, {5, 6, 7, 8, 9});
+        layer.MoveZTo(tpc.Z() / 2, {4, 5, 6, 7});
     sils->DrawGeo();
     std::cout << "Sils Z centred at : " << tpc.Z() / 2 << " mm" << '\n';
     // This means: make the Z of silicons {5,6,...} be that zOfBeam.
@@ -166,6 +176,8 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     auto hRPxEbothSil {Histos::RP_E.GetHistogram()};
     hRPxEbothSil->SetTitle("RPvsE if 2 Sil");
     auto hRPxEStoppedGas {Histos::RP_E.GetHistogram()};
+    auto hRPeffAll {Histos::RP_eff.GetHistogram()};
+    auto hRPeffIn {Histos::RP_eff.GetHistogram()};
 
     for(int it = 0; it < niter; it++)
     {
@@ -174,6 +186,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         // std::cout<<"Searching for: "<<Ecm<<std::endl;
         auto vertex {SampleVertex(&tpc)};
         vertex.SetX(eCMtoRP->Eval(Ecm));
+        hRPeffAll->Fill(vertex.X());
         // std::cout<<vertex.X()<<std::endl;
 
         // Slow beam with straggling
@@ -287,12 +300,17 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
             hThetaCM->Fill(thetaCM * TMath::RadToDeg()); // only thetaCm that enter our cuts
             hThetaCMThetaLab->Fill(thetaCM * TMath::RadToDeg(), theta3Lab * TMath::RadToDeg());
             hRPxEbothSil->Fill(vertex.X(), T3Rec);
+            hRPeffIn->Fill(vertex.X());
         }
     }
 
     // Compute efficiency
     auto* eff {new TEfficiency {*hThetaCM, *hThetaCMAll}};
     eff->SetNameTitle("eff", "#theta_{CM} efficiency;#epsilon;#theta_{CM} [#circ]");
+    // Now efficiency in intervals
+    auto* effIntervals {new TEfficiency {*hRPeffIn, *hRPeffAll}};
+    effIntervals->SetNameTitle("effIntervals", "#RPx efficiency;#epsilon;#RPx [#mm]");
+
 
     // Draw if not running for multiple Exs
     if(inspect)
@@ -338,6 +356,7 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         hRPxEStoppedGas->DrawClone();
 
         auto* cEff {new TCanvas {"cEff", "Eff in RPx intervals"}};
+        effIntervals->Draw("apl");
 
         auto cEcm = new TCanvas("cEcm", "Resonant E_{CM} vs RP.X()");
         cEcm->DivideSquare(2);
