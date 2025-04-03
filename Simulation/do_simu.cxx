@@ -109,11 +109,14 @@ TF1* GetEcmRPRelation(ActPhysics::Kinematics* kin, ActPhysics::SRIM* srim, doubl
     double x0 {0};
     double x1 {256};
     double step {1};
+    kin->GetParticle(1).Print();
+    kin->GetParticle(2).Print();
+    kin->GetParticle(3).Print();
     for(double x = x0; x <= x1; x += step)
     {
         auto TbeamCorr {srim->Slow("beam", Tbeam, x)};
-        auto beamThreshold {ActPhysics::Kinematics(kin->GetParticle(0), kin->GetParticle(1), kin->GetParticle(2), -1, Ex).GetT1Thresh()};
-        std::cout<<beamThreshold<<std::endl;
+        auto beamThreshold {ActPhysics::Kinematics(kin->GetParticle(1), kin->GetParticle(2), kin->GetParticle(3), -1, Ex).GetT1Thresh()};
+        // std::cout<<"TbeamCorr: "<<TbeamCorr<< " Beam Threshold: "<< beamThreshold << " x: "<< x <<std::endl;
         if(std::isnan(TbeamCorr) || TbeamCorr < beamThreshold){
             continue;}
         kin->SetBeamEnergy(TbeamCorr);
@@ -197,10 +200,16 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     outTree->Branch("Eex", &Eex_tree);
     double RP_tree {};
     outTree->Branch("RP", &RP_tree);
+    double T3Rec_tree {};
+    outTree->Branch("T3Rec", &T3Rec_tree);
     double theta3Lab_tree {};
     outTree->Branch("theta3Lab", &theta3Lab_tree);
     double phi3CM_tree {};
     outTree->Branch("phi3CM", &phi3CM_tree);
+    double T4_tree {};
+    outTree->Branch("T4Lab", &T4_tree);
+    double range4_tree {};
+    outTree->Branch("Range4", &range4_tree);
 
     for(int it = 0; it < niter; it++)
     {
@@ -245,6 +254,9 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
         // silPoint0: SP in millimetres. in standard ACTAR frame (same as analysis)
         if(silIndex0 == -1)
             continue;
+        // Heavy particle information
+        auto T4Lab {kin->GetT4Lab()};
+        auto range4 {srim->EvalRange("beam", T4Lab)};
 
         // Slow down light in gas
         auto T3AtSil {srim->SlowWithStraggling("light", T3Lab, (silPoint0 - vertex).R())};
@@ -332,8 +344,11 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
             Eex_tree = ExRec;
             theta3CM_tree = thetaCM * TMath::RadToDeg();
             RP_tree = vertex.X();
+            T3Rec_tree = T3Rec;
             theta3Lab_tree = theta3Lab * TMath::RadToDeg();
             phi3CM_tree = phiCM;
+            T4_tree = T4Lab;
+            range4_tree = range4;
             outTree->Fill();
         }
     }
@@ -345,6 +360,12 @@ void do_simu(const std::string& beam, const std::string& target, const std::stri
     auto* effIntervals {new TEfficiency {*hRPeffIn, *hRPeffAll}};
     effIntervals->SetNameTitle("effIntervals", "#RPx efficiency;#epsilon;#RPx [#mm]");
 
+    // SAVING
+    outFile->cd();
+    outTree->Write();
+    outFile->Close();
+    delete outFile;
+    outFile = nullptr;
 
     // Draw if not running for multiple Exs
     if(inspect)
